@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tistory Twitter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.min.js"></script> 
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    // [1. 새 게시글 팝 애니메이션]을 더 부드럽게 수정 (0.7s -> 1.2s)
+                    keyframes: {
+                        'pulse-once': {
+                            '0%': { opacity: 0, transform: 'translateY(-10px)', backgroundColor: 'transparent' },
+                            '10%': { opacity: 0.8, transform: 'translateY(0)', backgroundColor: 'rgba(59, 130, 246, 0.05)' },
+                            '100%': { opacity: 1, backgroundColor: 'transparent' },
+                        },
+                        'dark-pulse-once': {
+                            '0%': { opacity: 0, transform: 'translateY(-10px)', backgroundColor: 'transparent' },
+                            '10%': { opacity: 0.8, transform: 'translateY(0)', backgroundColor: 'rgba(29, 78, 216, 0.1)' },
+                            '100%': { opacity: 1, backgroundColor: 'transparent' },
+                        }
+                    },
+                    animation: {
+                        'pulse-once': 'pulse-once 1.2s ease-out', // 1.2s로 변경
+                        'dark-pulse-once': 'dark-pulse-once 1.2s ease-out', // 1.2s로 변경
+                    }
+                },
+            }
+        }
+    </script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        window.firebase = {
+            initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut,
+            getFirestore, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, getDoc, setDoc
+        };
+    </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 font-sans">
+
+<div id="root"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, useRef } = React;
+    
+    // 유틸리티 함수: SHA-256 해시 생성 (비밀번호 보안용)
+    const sha256 = async (str) => {
+        const buffer = new TextEncoder().encode(str);
+        const hash = await crypto.subtle.digest('SHA-256', buffer);
+        const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+        return hex;
+    };
+    
+    // Lucide 아이콘 정의
+    const Lucide = window.LucideReact || {};
+    
+    const LogOut = Lucide.LogOut || '🚪'; 
+    const MessageSquare = Lucide.MessageSquare || '💬'; 
+    const Loader = Lucide.Loader || '↻'; 
+    const AlertTriangle = Lucide.AlertTriangle || '⚠️';
+    const ChevronDown = Lucide.ChevronDown || '▼';
+    const ChevronUp = Lucide.ChevronUp || '▲';
+    const Home = Lucide.Home || '🏠';
+    const Heart = Lucide.Heart || '❤️';
+    const Bookmark = Lucide.Bookmark || '☆';
+    const RepeatIcon = Lucide.Repeat2 || '⇆';
+    const Image = Lucide.Image || '🖼️';
+    const X = Lucide.X || '❌';
+    const ArrowLeft = Lucide.ArrowLeft || '←';
+    const Bell = Lucide.Bell || '🔔';
+    const Sun = Lucide.Sun || '☼';
+    const Moon = Lucide.Moon || '☽';
+
+    const hardcodedFirebaseConfig = {
+apiKey: "AIzaSyAqjmjuHR9c9LU3fw-opriDk4TA2sdw-N8",
+  authDomain: "shin1-35930.firebaseapp.com",
+  projectId: "shin1-35930",
+  storageBucket: "shin1-35930.firebasestorage.app",
+  messagingSenderId: "341705553561",
+  appId: "1:341705553561:web:b071abdf4b15e966eb2a08",
+  measurementId: "G-86NJYXDMC4"
+};
+const ACTIVE_USER_STORAGE_KEY = 'miniTwitterActiveUser';
+    const LAST_CHECKED_NOTIFICATIONS_KEY = 'miniTwitterLastCheckedNotifications';
+    const DARK_MODE_STORAGE_KEY = 'miniTwitterDarkMode';
+
+    let firebaseConfig, initialAuthToken, canvasAppId;
+    
+    if (Object.keys(hardcodedFirebaseConfig).length > 0 && hardcodedFirebaseConfig.apiKey !== "YOUR_API_KEY") {
+        firebaseConfig = hardcodedFirebaseConfig;
+        canvasAppId = hardcodedFirebaseConfig.projectId;
+        initialAuthToken = null;
+    } else if (typeof window.__firebase_config !== 'undefined') {
+        firebaseConfig = JSON.parse(window.__firebase_config);
+        canvasAppId = typeof window.__app_id !== 'undefined' ? window.__app_id : firebaseConfig.projectId;
+        initialAuthToken = typeof window.__initial_auth_token !== 'undefined' ? window.__initial_auth_token : null;
+    } else {
+        firebaseConfig = { apiKey: 'MOCK_API_KEY', authDomain: 'mock-project.firebaseapp.com', projectId: 'mock-project' };
+        canvasAppId = 'default-app-id';
+        initialAuthToken = null;
+    }
+
+    const { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut,
+            getFirestore, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, getDoc, setDoc } = window.firebase || {};
+
+    const getInitialActiveUser = () => localStorage.getItem(ACTIVE_USER_STORAGE_KEY);
