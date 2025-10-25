@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>익명</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial;background:#0b1220;color:#e6edf3;}a{color:#9ad1ff}.container{max-width:900px;margin:0 auto;padding:20px;}</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, deleteDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqjmjuHR9c9LU3fw-opriDk4TA2sdw-N8",
+  authDomain: "shin1-35930.firebaseapp.com",
+  projectId: "shin1-35930",
+  storageBucket: "shin1-35930.firebasestorage.app",
+  messagingSenderId: "341705553561",
+  appId: "1:341705553561:web:b071abdf4b15e966eb2a08",
+  measurementId: "G-86NJYXDMC4"
+};
+
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+window.__fb = { app, db, storage };
+</script>
+
+</head>
+<body>
+<div class="container">
+  <header class="mb-4 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold">게시판</h1>
+    </div>
+    <div>
+      <a href="index.html" class="px-3 py-1 border rounded mr-2">홈</a>
+      <a href="write.html" class="px-3 py-1 bg-slate-800 rounded">글쓰기</a>
+    </div>
+  </header>
+
+  <div class="mb-4 p-3 bg-slate-900 rounded">
+    <label class="text-xs text-gray-400">관리자 인증</label>
+    <div class="mt-2 flex items-center space-x-2">
+      <input id="admin-pw" type="password" placeholder="관리자 비밀번호 입력" class="p-2 rounded bg-slate-800 text-white" />
+      <button id="admin-login" class="px-3 py-2 bg-green-600 rounded">인증</button>
+      <button id="admin-logout" class="px-3 py-2 bg-gray-600 rounded hidden">로그아웃</button>
+      <div id="admin-status" class="text-sm text-yellow-300 ml-3"></div>
+    </div>
+  </div>
+
+  <main id="posts" class="space-y-3">
+    <div class="text-sm text-gray-400">불러오는 중...</div>
+  </main>
+</div>
+
+<script>
+async function sha256hex(message) {
+  const msgUint8 = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+const ADMIN_HASH = '319948667198ea01be6ce9d32226d430714a3bd3e30c6d50be9847d3a2353c81';
+
+const db = window.__fb.db;
+
+let isAdmin = sessionStorage.getItem('isAdmin') === '1';
+
+function setAdminUI(val) {
+  isAdmin = val;
+  sessionStorage.setItem('isAdmin', val ? '1' : '0');
+  document.getElementById('admin-status').textContent = val ? '관리자 인증됨' : '';
+  document.getElementById('admin-logout').classList.toggle('hidden', !val);
+  document.getElementById('admin-login').classList.toggle('hidden', val);
+  document.getElementById('admin-pw').disabled = val;
+}
+
+document.getElementById('admin-login').addEventListener('click', async () => {
+  const pw = document.getElementById('admin-pw').value || '';
+  const h = await sha256hex(pw);
+  if (h === ADMIN_HASH) { setAdminUI(true); alert('관리자 인증 성공'); loadPosts(); }
+  else alert('비밀번호 틀림');
+});
+
+document.getElementById('admin-logout').addEventListener('click', () => setAdminUI(false));
+
+</script>
+
+<script type="module">
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const postsEl = document.getElementById('posts');
+let unsubscribe = null;
+
+function renderPost(snap) {
+  const id = snap.id;
+  const d = snap.data();
+  const created = d.createdAt && d.createdAt.seconds ? new Date(d.createdAt.seconds*1000).toLocaleString() : '';
+  const div = document.createElement('div');
+  div.className = 'p-4 bg-slate-900 rounded';
+  let html = '<div class="flex justify-between items-start"><div><div class="text-sm text-gray-300 font-medium">' + (d.authorName||'익명') + '</div><div class="text-xs text-gray-500">' + created + '</div></div><div><a href="post.html?id=' + id + '" class="text-sm text-blue-400">상세</a></div></div><div class="mt-3 text-gray-200 whitespace-pre-wrap">' + (d.content||'') + '</div>';
+  if (d.imageUrl) html += '<div class="mt-3"><img src="' + d.imageUrl + '" alt="img" class="max-w-full rounded" /></div>';
+  if (isAdmin) html += '<div class="mt-3 text-right"><button data-id="' + id + '" class="delete-btn text-sm text-red-400">삭제</button></div>';
+  div.innerHTML = html;
+  return div;
+}
+
+function loadPosts() {
+  postsEl.innerHTML = '<div class="text-sm text-gray-400">불러오는 중...</div>';
+  const q = query(collection(db,'posts'), orderBy('createdAt','desc'));
+  if (unsubscribe) unsubscribe();
+  unsubscribe = onSnapshot(q, (snap) => {
+    postsEl.innerHTML='';
+    if (snap.empty) { postsEl.innerHTML='<div class="text-sm text-gray-400">게시물 없음</div>'; return; }
+    snap.forEach(docSnap => { postsEl.appendChild(renderPost(docSnap)); });
+    document.querySelectorAll('.delete-btn').forEach(btn=>{ btn.addEventListener('click', async e => { if(!confirm('삭제?')) return; try{ await deleteDoc(doc(db,'posts',e.currentTarget.dataset.id)); alert('삭제됨'); } catch(err){ alert('삭제 실패:'+err.message);} }); });
+  });
+}
+
+setAdminUI(isAdmin);
+loadPosts();
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html><html lang="ko"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>익명</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial;background:#0b1220;color:#e6edf3;}a{color:#9ad1ff}.container{max-width:900px;margin:0 auto;padding:20px;}</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, deleteDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqjmjuHR9c9LU3fw-opriDk4TA2sdw-N8",
+  authDomain: "shin1-35930.firebaseapp.com",
+  projectId: "shin1-35930",
+  storageBucket: "shin1-35930.firebasestorage.app",
+  messagingSenderId: "341705553561",
+  appId: "1:341705553561:web:b071abdf4b15e966eb2a08",
+  measurementId: "G-86NJYXDMC4"
+};
+
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+window.__fb = { app, db, storage };
+</script>
+
+</head><body><div class="container">
+  <a href="board.html" class="text-sm">← 목록</a>
+  <div id="post" class="p-4 bg-slate-900 rounded mt-3 text-gray-200">불러오는 중...</div>
+</div>
+
+<script type="module">
+import { doc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+const db = window.__fb.db;
+const id = new URLSearchParams(location.search).get('id');
+const postEl=document.getElementById('post');
+
+(async()=>{
+  if(!id){ postEl.textContent='잘못된 요청'; return; }
+  const s=await getDoc(doc(db,'posts',id));
+  if(!s.exists()) { postEl.textContent='없는 게시물'; return; }
+  const d=s.data();
+  let html='<div class="text-sm text-gray-300 font-medium">'+(d.authorName||'익명')+'</div>';
+  html+='<div class="text-xs text-gray-500 mb-3">'+(d.createdAt&&d.createdAt.seconds?new Date(d.createdAt.seconds*1000).toLocaleString():'')+'</div>';
+  html+='<div class="text-gray-200 whitespace-pre-wrap">'+(d.content||'')+'</div>';
+  if(d.imageUrl) html+='<div class="mt-3"><img src="'+d.imageUrl+'" class="max-w-full rounded"></div>';
+  const isAdmin = sessionStorage.getItem('isAdmin')==='1';
+  if(isAdmin) html+='<div class="mt-4 text-right"><button id="del-btn" class="px-3 py-1 bg-red-600 rounded">삭제</button></div>';
+  postEl.innerHTML=html;
+  if(isAdmin) document.getElementById('del-btn').addEventListener('click', async()=>{ if(!confirm('삭제?')) return; try{ await deleteDoc(doc(db,'posts',id)); alert('삭제됨'); location.href='board.html'; }catch(e){ alert('삭제 실패:'+e.message);} });
+})();
+</script>
+</body></html>

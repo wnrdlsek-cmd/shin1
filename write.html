@@ -1,0 +1,65 @@
+<!doctype html><html lang="ko"><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>익명</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>body{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial;background:#0b1220;color:#e6edf3;}a{color:#9ad1ff}.container{max-width:900px;margin:0 auto;padding:20px;}</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getFirestore, collection, addDoc, serverTimestamp, query, orderBy, onSnapshot, deleteDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAqjmjuHR9c9LU3fw-opriDk4TA2sdw-N8",
+  authDomain: "shin1-35930.firebaseapp.com",
+  projectId: "shin1-35930",
+  storageBucket: "shin1-35930.firebasestorage.app",
+  messagingSenderId: "341705553561",
+  appId: "1:341705553561:web:b071abdf4b15e966eb2a08",
+  measurementId: "G-86NJYXDMC4"
+};
+
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+window.__fb = { app, db, storage };
+</script>
+
+</head><body><div class="container">
+  <header class="mb-4">
+    <h1 class="text-2xl font-bold">글쓰기</h1>
+    <a href="board.html" class="text-sm">게시판</a>
+  </header>
+
+  <textarea id="content" class="w-full p-3 bg-slate-800 rounded" placeholder="내용"></textarea>
+  <input id="file-input" type="file" class="mt-3" accept="image/*">
+  <button id="upload-btn" class="px-4 py-2 bg-green-600 rounded mt-3">게시</button>
+
+  <div id="status" class="text-sm text-gray-400 mt-3"></div>
+</div>
+
+<script type="module">
+import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+const db = window.__fb.db; const storage = window.__fb.storage;
+
+document.getElementById('upload-btn').onclick = async () => {
+  const text = document.getElementById('content').value;
+  const file = document.getElementById('file-input').files[0];
+  let url=null;
+  try{
+    if(file){
+      const path='posts/'+Date.now()+'_'+file.name;
+      const snap=await uploadBytes(storageRef(storage,path),file);
+      url=await getDownloadURL(snap.ref);
+    }
+    await addDoc(collection(db,'posts'),{content:text,imageUrl:url||null,createdAt:serverTimestamp(),authorName:'익명'});
+    location.href='board.html';
+  }catch(e){ alert('저장 실패:'+e.message); }
+};
+</script>
+</body></html>
