@@ -173,17 +173,86 @@ function loadPosts() {
 loadPosts();
 </script>
 
-<script>
-async function sha256hex(msg){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+<script type="module">
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const db = window.__fb.db;
+
+let isAdmin = sessionStorage.getItem('isAdmin') === '1';
+
+function setAdminUI(v) {
+  isAdmin = v;
+  sessionStorage.setItem('isAdmin', v ? '1' : '0');
+  const status = document.getElementById('admin-status');
+  status.textContent = v ? "관리자 인증됨" : "";
+  document.getElementById('admin-login').classList.toggle('hidden', v);
+  document.getElementById('admin-logout').classList.toggle('hidden', !v);
+  document.getElementById('admin-pw').disabled = v;
+}
+
+async function sha256hex(msg) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(msg));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
 const ADMIN_HASH = "319948667198ea01be6ce9d32226d430714a3bd3e30c6d50be9847d3a2353c81";
-let isAdmin = sessionStorage.getItem('isAdmin') === '1';
-function setAdminUI(v){ isAdmin=v; sessionStorage.setItem('isAdmin',v?'1':'0'); }
 
+document.getElementById('admin-login').addEventListener('click', async () => {
+  const inputPw = document.getElementById('admin-pw').value;
+  const h = await sha256hex(inputPw);
+  if (h === ADMIN_HASH) {
+    setAdminUI(true);
+    loadPosts();
+  } else {
+    alert('비밀번호가 틀렸습니다');
+  }
+});
+
+document.getElementById('admin-logout').addEventListener('click', () => {
+  setAdminUI(false);
+  loadPosts();
+});
+
+const postsEl = document.getElementById('posts');
+
+function loadPosts() {
+  postsEl.innerHTML = '불러오는 중...';
+
+  const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+
+  onSnapshot(q, (snap) => {
+    postsEl.innerHTML = '';
+
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      const div = document.createElement('div');
+      div.className = 'p-4 bg-slate-900 rounded';
+
+      let html = `
+        <div class="text-gray-200 whitespace-pre-wrap">${d.content}</div>
+      `;
+
+      if (d.imageUrl) {
+        html += `<img src="${d.imageUrl}" class="mt-2 rounded">`;
+      }
+
+      if (isAdmin) {
+        html += `<button data-id="${docSnap.id}" class="delete-btn text-red-400 text-sm mt-2 block">삭제</button>`;
+      }
+
+      div.innerHTML = html;
+      postsEl.appendChild(div);
+    });
+
+    document.querySelectorAll('.delete-btn').forEach(btn=>{
+      btn.addEventListener('click', async e=>{
+        if (!confirm("정말 삭제하시겠습니까?")) return;
+        await deleteDoc(doc(db, 'posts', e.target.dataset.id));
+      });
+    });
+  });
+}
+
+setAdminUI(isAdmin);
+loadPosts();
 </script>
-
-</body>
-</html>
