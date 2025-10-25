@@ -127,5 +127,63 @@ function loadPosts() {
 setAdminUI(isAdmin);
 loadPosts();
 </script>
+  <script type="module">
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const db = window.__fb.db;
+
+const postsEl = document.getElementById('posts');
+let unsubscribe = null;
+
+function loadPosts() {
+  postsEl.innerHTML = '불러오는 중...';
+
+  const q = query(collection(db,'posts'), orderBy('createdAt','desc'));
+  if (unsubscribe) unsubscribe();
+
+  unsubscribe = onSnapshot(q, (snap) => {
+    postsEl.innerHTML = '';
+
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      const div = document.createElement('div');
+      div.className='p-4 bg-slate-900 rounded';
+
+      let html = `<a href="post.html?id=${docSnap.id}" class="text-blue-400 text-sm">상세보기</a>
+      <div class="mt-2 text-gray-200 whitespace-pre-wrap">${d.content || ''}</div>`;
+
+      if(d.imageUrl)
+        html += `<img src="${d.imageUrl}" class="mt-2 max-w-full rounded">`;
+
+      if(isAdmin)
+        html += `<button data-id="${docSnap.id}" class="delete-btn text-red-400 text-sm mt-2 block">삭제</button>`;
+
+      div.innerHTML = html;
+      postsEl.appendChild(div);
+    });
+
+    document.querySelectorAll('.delete-btn').forEach(btn=>{
+      btn.addEventListener('click', async e=>{
+        await deleteDoc(doc(db,'posts', e.target.dataset.id));
+      });
+    });
+  });
+}
+
+loadPosts();
+</script>
+
+<script>
+async function sha256hex(msg){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+const ADMIN_HASH = "319948667198ea01be6ce9d32226d430714a3bd3e30c6d50be9847d3a2353c81";
+let isAdmin = sessionStorage.getItem('isAdmin') === '1';
+function setAdminUI(v){ isAdmin=v; sessionStorage.setItem('isAdmin',v?'1':'0'); }
+
+</script>
+
 </body>
 </html>
